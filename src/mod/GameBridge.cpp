@@ -4,29 +4,28 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 
 #include <pl/memory/Hook.hpp>
 
 namespace clange_me::game {
 namespace {
 
-class ClientInstanceScreenModel;
+class ClientInstanceScreenModel {
+public:
+    void sendChatMessage(std::string const& message);
+};
 
 using ModelPtr = std::shared_ptr<ClientInstanceScreenModel>;
 using CtorFn = void* (*)(void*, ModelPtr);
-using SendChatFn = void* (*)(ClientInstanceScreenModel*, const std::string&);
 
 std::mutex gMutex;
 ClientInstanceScreenModel* gModel = nullptr;
 CtorFn gOriginalCtor = nullptr;
-SendChatFn gSendChat = nullptr;
 bool gInitialized = false;
 
 constexpr const char* kCtorSymbol =
     "_ZN30ClientInstanceScreenController5$ctorESt10shared_ptrI25ClientInstanceScreenModelE";
-
-constexpr const char* kSendChatSymbol =
-    "_ZN24ClientInstanceScreenModel15sendChatMessageERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE";
 
 void* findGameSymbol(const char* name) {
     if (void* p = dlsym(RTLD_DEFAULT, name)) {
@@ -44,15 +43,12 @@ void* findGameSymbol(const char* name) {
 }
 
 void* hookedCtor(void* self, ModelPtr model) {
+    ClientInstanceScreenModel* captured = model.get();
     void* result = gOriginalCtor ? gOriginalCtor(self, std::move(model)) : self;
 
-    {
+    if (captured) {
         std::lock_guard lock(gMutex);
-        if (result) {
-            // The constructor argument is the model used by this controller.
-            // Recovering it here is intentionally avoided after the move;
-            // the active model is captured by the caller-side hook below.
-        }
+        gModel = captured;
     }
 
     return result;
@@ -63,20 +59,9 @@ void* hookedCtor(void* self, ModelPtr model) {
 bool initialize() {
     std::lock_guard lock(gMutex);
     if (gInitialized) {
-        return gModel != nullptr;
+        return true;
     }
 
-    // sendChatMessage is resolved independently. The controller constructor
-    // hook is installed only when the game exports the expected 1.26.50 ABI.
-    auto sendChat = findGameSymbol(kSendChatSymbol);
-    if (!sendChat) {
-        return false;
-    }
-
-    gSendChat = reinterpret_cast<SendChatFn>(sendChat);
-
-    // The constructor symbol is exported by the client and is used to keep
-    // the bridge tied to the live ClientInstanceScreenModel instance.
     auto ctor = findGameSymbol(kCtorSymbol);
     if (!ctor) {
         return false;
@@ -97,16 +82,16 @@ bool initialize() {
 
 bool isReady() {
     std::lock_guard lock(gMutex);
-    return gInitialized && gModel && gSendChat;
+    return gInitialized && gModel != nullptr;
 }
 
 bool runCommand(const std::string& command) {
     std::lock_guard lock(gMutex);
-    if (!gSendChat || !gModel) {
+    if (!gModel) {
         return false;
     }
 
-    gSendChat(gModel, command);
+    gModel->sendChatMessage(command);
     return true;
 }
 
