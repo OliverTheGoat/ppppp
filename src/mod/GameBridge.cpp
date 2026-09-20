@@ -1,5 +1,7 @@
 #include "mod/GameBridge.h"
 
+#include <algorithm>
+#include <cmath>
 #include <dlfcn.h>
 #include <memory>
 #include <mutex>
@@ -8,12 +10,44 @@
 
 #include <pl/memory/Hook.hpp>
 
-namespace clange_me::game {
-namespace {
+// Minimal ABI-compatible declarations for the 26.50 client-side MCAPI types
+// used by this bridge. These are resolved from libminecraftpe.so at runtime.
+namespace Core {
+template <typename T>
+class PathBuffer {
+public:
+    T value;
+};
+
+class Path : public PathBuffer<std::string> {
+public:
+    Path() = default;
+    explicit Path(std::string const& value) : PathBuffer<std::string>{value} {}
+    explicit Path(std::string&& value) : PathBuffer<std::string>{std::move(value)} {}
+    explicit Path(char const* value) : PathBuffer<std::string>{std::string(value)} {}
+};
+} // namespace Core
+
+struct Vec3 {
+    float x;
+    float y;
+    float z;
+};
+
+class StructureTemplate;
 
 class ClientInstanceScreenModel {
 public:
     void sendChatMessage(std::string const& message);
+    StructureTemplate* importStructureBlock(
+        std::string const& structureName,
+        Core::Path const& filePath
+    );
+    void insertStructureBlockRequest(
+        std::string const& structureName,
+        StructureTemplate const& structureTemplate
+    );
+    Vec3 getPlayerPosition() const;
 };
 
 using ModelPtr = std::shared_ptr<ClientInstanceScreenModel>;
@@ -54,6 +88,10 @@ void* hookedCtor(void* self, ModelPtr model) {
     return result;
 }
 
+std::string makePosition(int x, int y, int z) {
+    return std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z);
+}
+
 } // namespace
 
 bool initialize() {
@@ -85,13 +123,47 @@ bool isReady() {
     return gInitialized && gModel != nullptr;
 }
 
-bool runCommand(const std::string& command) {
-    std::lock_guard lock(gMutex);
-    if (!gModel) {
+bool giveLordsShulker(const std::string& structurePath) {
+    ClientInstanceScreenModel* model = nullptr;
+    {
+        std::lock_guard lock(gMutex);
+        if (!gInitialized || !gModel) {
+            return false;
+        }
+        model = gModel;
+    }
+
+    const std::string structureName = "mystructure:Lords_Shulker";
+    Core::Path filePath(structurePath);
+    StructureTemplate* structure = model->importStructureBlock(structureName, filePath);
+    if (!structure) {
         return false;
     }
 
-    gModel->sendChatMessage(command);
+    // Send the uploaded structure template to the connected server.
+    model->insertStructureBlockRequest(structureName, *structure);
+
+    // Work well away from the player, then loot the shulker block that exists
+    // at relative (2, 3, 2) inside the uploaded 5x5x5 template.
+    const Vec3 player = model->getPlayerPosition();
+    const int baseX = static_cast<int>(std::floor(player.x)) + 10000;
+    const int baseY = static_cast<int>(std::floor(player.y));
+    const int baseZ = static_cast<int>(std::floor(player.z)) + 10000;
+    const int shulkerX = baseX + 2;
+    const int shulkerY = baseY + 3;
+    const int shulkerZ = baseZ + 2;
+
+    model->sendChatMessage(
+        "/structure load " + structureName + " " + makePosition(baseX, baseY, baseZ)
+    );
+    model->sendChatMessage(
+        "/loot give @s mine " + makePosition(shulkerX, shulkerY, shulkerZ)
+    );
+    model->sendChatMessage(
+        "/fill " + makePosition(baseX, baseY, baseZ) + " "
+        + makePosition(baseX + 4, baseY + 4, baseZ + 4) + " air"
+    );
+
     return true;
 }
 
