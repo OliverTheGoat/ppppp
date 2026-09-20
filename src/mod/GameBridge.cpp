@@ -1,6 +1,5 @@
 #include "mod/GameBridge.h"
 
-#include <algorithm>
 #include <cmath>
 #include <dlfcn.h>
 #include <memory>
@@ -11,7 +10,8 @@
 #include <pl/memory/Hook.hpp>
 
 // Minimal ABI-compatible declarations for the 26.50 client-side MCAPI types
-// used by this bridge. These are resolved from libminecraftpe.so at runtime.
+// used by this bridge. These match the public LeviLamina client headers and
+// are resolved from libminecraftpe.so at runtime by the Android loader.
 namespace Core {
 template <typename T>
 class PathBuffer {
@@ -52,6 +52,9 @@ public:
 
 using ModelPtr = std::shared_ptr<ClientInstanceScreenModel>;
 using CtorFn = void* (*)(void*, ModelPtr);
+
+namespace clange_me::game {
+namespace {
 
 std::mutex gMutex;
 ClientInstanceScreenModel* gModel = nullptr;
@@ -140,15 +143,14 @@ bool giveLordsShulker(const std::string& structurePath) {
         return false;
     }
 
-    // Send the uploaded structure template to the connected server.
     model->insertStructureBlockRequest(structureName, *structure);
 
-    // Work well away from the player, then loot the shulker block that exists
-    // at relative (2, 3, 2) inside the uploaded 5x5x5 template.
     const Vec3 player = model->getPlayerPosition();
     const int baseX = static_cast<int>(std::floor(player.x)) + 10000;
     const int baseY = static_cast<int>(std::floor(player.y));
     const int baseZ = static_cast<int>(std::floor(player.z)) + 10000;
+
+    // The uploaded 5x5x5 structure contains the red shulker at relative (2,3,2).
     const int shulkerX = baseX + 2;
     const int shulkerY = baseY + 3;
     const int shulkerZ = baseZ + 2;
