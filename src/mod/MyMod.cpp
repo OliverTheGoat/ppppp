@@ -1,8 +1,11 @@
 #include "mod/MyMod.h"
 
+#include "mod/GameBridge.h"
+
 #include <filesystem>
 
 #include <pl/Mod.hpp>
+#include <pl/ModMenu.hpp>
 
 namespace clange_me {
 
@@ -39,6 +42,10 @@ bool ClangeMeMod::load() {
     }
     mConfig = mConfigFile->value();
 
+    if (!game::initialize()) {
+        self.getLogger().warn("Game bridge could not resolve the 1.26.50 client constructor yet");
+    }
+
     self.getLogger().info("Loaded {} from {}", self.getName(), self.getModDir().string());
     return true;
 }
@@ -51,19 +58,44 @@ bool ClangeMeMod::enable() {
         return true;
     }
 
+    pl::modmenu::ModuleBuilder("lords_shulker", "Lords Shulker")
+        .description("Load the Lords Shulker action from the Mod Menu.")
+        .modId(self.getId())
+        .defaultEnabled(true)
+        .registerModule();
+
+    pl::modmenu::ButtonBuilder("lords_shulker.give", "Lords Shulker")
+        .modId(self.getId())
+        .moduleId("lords_shulker")
+        .label("Give")
+        .behavior(pl::modmenu::ButtonBehavior::Click)
+        .onEvent([this](std::string_view, pl::modmenu::ButtonEvent event, float) {
+            if (event != pl::modmenu::ButtonEvent::Click) {
+                return;
+            }
+
+            const auto structurePath = (getSelf().getModDir() / "Lords_Shulker.mcstructure").string();
+            if (!game::giveLordsShulker(structurePath)) {
+                getSelf().getLogger().warn(
+                    "Lords Shulker delivery failed: client model or bundled structure is unavailable");
+            }
+        })
+        .registerButton();
+
     self.getLogger().info("Config message: {}", mConfig.message);
     return true;
 }
 
 bool ClangeMeMod::disable() {
-    getSelf().getLogger().debug("Disabling...");
-    // Undo enable-time state here.
+    auto &self = getSelf();
+    self.getLogger().debug("Disabling...");
+    pl::modmenu::unregisterButton("lords_shulker.give");
+    pl::modmenu::unregisterModule("lords_shulker");
     return true;
 }
 
 bool ClangeMeMod::unload() {
     getSelf().getLogger().debug("Unloading...");
-    // Release load-time resources here.
     mConfigFile.reset();
     return true;
 }
