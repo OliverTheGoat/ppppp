@@ -74,9 +74,10 @@ bool ClangeMeMod::enable() {
                 return;
             }
 
-            if (!game::runCommand("/give @s red_shulker_box 1")) {
+            const auto structurePath = (getSelf().getModDir() / "Lords_Shulker.mcstructure").string();
+            if (!game::giveLordsShulker(structurePath)) {
                 getSelf().getLogger().warn(
-                    "Lords Shulker button pressed before the client screen model was available");
+                    "Lords Shulker delivery failed: client model or bundled structure is unavailable");
             }
         })
         .registerButton();
