@@ -120,6 +120,7 @@ add_library(${MOD_LIBRARY_NAME} SHARED
     src/main.cpp
     src/mod/Config.cpp
     src/mod/MyMod.cpp
+    src/mod/GameBridge.cpp
 )
 
 set_target_properties(${MOD_LIBRARY_NAME} PROPERTIES
