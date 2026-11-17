@@ -1,5 +1,6 @@
 #include "mod/MyMod.h"
 
+#include <exception>
 #include <filesystem>
 #include <system_error>
 
