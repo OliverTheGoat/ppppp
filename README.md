@@ -1,160 +1,73 @@
-# LeviLauncher Android Mod Template
+# Horion Android — LeviLauncher Native Package Scaffold
 
-This is a CMake template for LeviLauncher Android native mods. It includes a
-ready-to-use `manifest.json`, CMake project, minimal `ClangeMeMod`, packaging script,
-typed config generation, and GitHub Actions workflow.
+This branch adapts the existing LeviLauncher Android native-mod template into an ARM64
+LeviPack project labelled **Horion Android**.
 
-## Project Layout
+## Important scope
 
-```text
-.
-├── CMakeLists.txt
-├── manifest.json.in
-├── scripts/package.ps1
-└── src
-    ├── config_generator.cpp
-    ├── main.cpp
-    └── mod
-        ├── Config.h
-        ├── Config.cpp
-        ├── MyMod.cpp
-        └── MyMod.h
-```
+This is **not a conversion of HorionContinued/Injector**. That repository is a
+Windows DLL injector; it does not contain the Horion client source that would be
+needed for a native Android port. Renaming a Windows DLL or injector to .so does
+not make it compatible with Android.
 
-## Requirements
+This branch is a safe native-mod scaffold demonstrating the supported LeviLauncher
+Preloader lifecycle, typed configuration, Android ARM64 compilation, and LeviPack
+packaging. It only writes diagnostic messages to the mod logger. It does **not**
+implement process injection, game-memory hooks, patches, signatures, or gameplay
+modifications.
 
-- Android SDK
-- Android NDK 28.2.13676358 or a compatible version
-- CMake 3.22+
-- Ninja
-- PowerShell 7+, or Windows PowerShell
+## Package details
 
-The CMake project fetches preloader-android release `0.2.2` from
-<https://github.com/LiteLDev/preloader-android> automatically.
+- Mod ID: horion_android
+- Display name: Horion Android Native Scaffold
+- ABI: arm64-v8a
+- Package: horion_android-0.1.0-arm64-v8a.levipack
+- Preloader Android SDK: 0.2.2 (pinned by CMake)
+- Android NDK: 28.2.13676358
+- Minecraft version declaration: empty until a target version is tested
 
-## Supported SDK Surface
+The package contains:
 
-Use only public headers from the SDK `include` directory:
+~~~text
+horion_android/
+├── manifest.json
+├── libhorion_android.so
+└── config/
+    ├── config.json
+    └── config.schema.json
+~~~
 
-```cpp
-#include <pl/Mod.hpp>
-#include <pl/Config.hpp>
-#include <pl/ModMenu.hpp>
-#include <pl/Input.hpp>
-#include <pl/memory/Hook.hpp>
-#include <pl/memory/Patch.hpp>
-#include <pl/memory/Signature.hpp>
-```
+## Build locally
 
-Do not add preloader `src` directories to your include path. This template uses
-the current C++ API with `PL_REGISTER_MOD`.
+Install Android SDK/NDK, CMake 3.22+, Ninja, and PowerShell 7+. Set
+ANDROID_HOME to your Android SDK directory, then run from the repository root:
 
-## Build
-
-```powershell
+~~~powershell
 $env:ANDROID_HOME = "C:/Users/<you>/AppData/Local/Android/Sdk"
-
 ./scripts/package.ps1 -Abi arm64-v8a
-```
+~~~
 
-Build both Android architectures:
+The output is written to build-arm64-v8a/.
 
-```powershell
-./scripts/package.ps1 -Abi all
-```
+## GitHub Actions
 
-After the build finishes, import the generated `.levipack` into LeviLauncher.
+The workflow in .github/workflows/build.yml builds the ARM64 package on pushes to
+horion-android-levipack, pull requests, and manual runs. It validates the ZIP
+contents and uploads the .levipack as an artifact. Version tags beginning with
+v also attach the package to a GitHub Release.
 
-## Customize Mod Info
+## Install in LeviLauncher
 
-Common CMake options:
+1. Download the .levipack artifact from the Actions run.
+2. Copy it to the Android device.
+3. In LeviLauncher, open the target instance's Mods page and choose Add Mod.
+4. Import the package, then launch a test instance and inspect Android log output.
 
-```powershell
-cmake -S . -B build-arm64-v8a `
-  -G Ninja `
-  -DCMAKE_TOOLCHAIN_FILE="$env:ANDROID_HOME/ndk/28.2.13676358/build/cmake/android.toolchain.cmake" `
-  -DANDROID_ABI=arm64-v8a `
-  -DANDROID_PLATFORM=android-28 `
-  -DANDROID_STL=c++_shared `
-  -DMOD_ID=clange_me `
-  -DMOD_NAME="Clange Me Mod" `
-  -DMOD_AUTHOR="clange_me" `
-  -DMOD_VERSION=0.1.0 `
-  -DMOD_LIBRARY_NAME=clange_me `
-  -DMOD_MINECRAFT_VERSIONS='["1.21.*"]' `
-  "-DMOD_ICON="
+Use a separate test instance and back up worlds before testing native mods.
 
-cmake --build build-arm64-v8a --target levi_package
-```
+## Next steps
 
-## Lifecycle
-
-Write your mod logic in [src/mod/MyMod.cpp](src/mod/MyMod.cpp):
-
-```cpp
-ClangeMeMod::ClangeMeMod() : mSelf(*ll::mod::NativeMod::current()) {}
-
-bool ClangeMeMod::load() {
-    getSelf().getLogger().debug("Loading...");
-    return true;
-}
-
-bool ClangeMeMod::enable() {
-    getSelf().getLogger().debug("Enabling...");
-    return true;
-}
-
-bool ClangeMeMod::disable() {
-    getSelf().getLogger().debug("Disabling...");
-    return true;
-}
-
-bool ClangeMeMod::unload() {
-    getSelf().getLogger().debug("Unloading...");
-    return true;
-}
-```
-
-`ll::mod::NativeMod::current()` is available while the mod instance is being
-registered, so the constructor can keep the loader-provided `mSelf` reference.
-Register one long-lived mod object with `PL_REGISTER_MOD`.
-
-Lifecycle meaning:
-
-1. `load()` runs when the mod is loaded.
-2. `enable()` runs before the game starts.
-3. `disable()` runs when the game is closing.
-4. `unload()` runs during final mod cleanup.
-
-Common APIs:
-
-- `getSelf().getLogger()`
-- `getSelf().getId()`
-- `getSelf().getName()`
-- `getSelf().getModDir()`
-- `getSelf().getDataDir()`
-- `getSelf().getConfigDir()`
-- `getSelf().getResourceDir()`
-
-Use `getSelf().getDataDir()` and `getSelf().getConfigDir()` for your mod's own data and config
-files.
-
-## Typed Config
-
-The template includes a minimal typed config in `src/mod/Config.h`:
-
-```cpp
-struct ModConfig {
-    int version = 1;
-    bool enabled = true;
-    std::string message = "Hello from clange_me";
-};
-```
-
-`ClangeMeMod::load()` uses `pl::config::ConfigFile<ModConfig>` to create and update
-`config/config.json`. The package script runs `src/config_generator.cpp` before
-Android compilation and includes generated `config.json` and
-`config.schema.json` in the `.levipack`.
-
-Keep this config small for your starter mod. Move larger examples, advanced
-schema coverage, or behavior tests into a separate project.
+This branch establishes the build and package pipeline only. A genuine Horion
+feature port would require Android-compatible Horion client source, a review of
+the source licence and dependencies, and separate implementation work. The
+Windows injector repository alone is not enough to produce that port.

@@ -6,13 +6,13 @@
 
 #include <pl/Mod.hpp>
 
-namespace clange_me {
+namespace horion_android {
 
-class ClangeMeMod {
+class HorionAndroidMod {
   public:
-    static ClangeMeMod &instance();
+    static HorionAndroidMod &instance();
 
-    ClangeMeMod();
+    HorionAndroidMod();
 
     [[nodiscard]] ll::mod::NativeMod &getSelf() const { return mSelf; }
 
@@ -27,4 +27,4 @@ class ClangeMeMod {
     std::optional<pl::config::ConfigFile<ModConfig>> mConfigFile;
 };
 
-} // namespace clange_me
+} // namespace horion_android

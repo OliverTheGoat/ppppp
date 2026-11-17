@@ -15,12 +15,19 @@ $repoRoot = Resolve-Path (Join-Path $scriptDir "..")
 function Invoke-ConfigGeneration {
     $configBuildDir = Join-Path $repoRoot "$BuildRoot-config"
 
-    & cmake -S $repoRoot -B $configBuildDir -G $Generator `
-        2>&1 |
+    & cmake -S $repoRoot -B $configBuildDir -G $Generator 2>&1 |
         ForEach-Object { Write-Host $_ }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "CMake config-generator configuration failed."
+    }
 
     & cmake --build $configBuildDir --target levi_generate_config 2>&1 |
         ForEach-Object { Write-Host $_ }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Config generation failed."
+    }
 
     return ((Resolve-Path (Join-Path $configBuildDir "generated-config")).Path -replace "\\", "/")
 }
@@ -62,14 +69,34 @@ function Invoke-ModBuild {
     $buildDir = Join-Path $repoRoot "$BuildRoot-$TargetAbi"
     $generatedConfigDir = Invoke-ConfigGeneration
 
-    cmake -S $repoRoot -B $buildDir -G $Generator `
-        -DCMAKE_TOOLCHAIN_FILE="$toolchain" `
-        -DANDROID_ABI="$TargetAbi" `
-        -DANDROID_PLATFORM="$AndroidPlatform" `
-        -DANDROID_STL="c++_shared" `
-        -DLEVI_PACKAGE_CONFIG_DIR="$generatedConfigDir"
+    $cmakeArgs = @(
+        "-S", $repoRoot,
+        "-B", $buildDir,
+        "-G", $Generator,
+        "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
+        "-DANDROID_ABI=$TargetAbi",
+        "-DANDROID_PLATFORM=$AndroidPlatform",
+        "-DANDROID_STL=c++_shared",
+        "-DLEVI_PACKAGE_CONFIG_DIR=$generatedConfigDir",
+        "-DMOD_ID=horion_android",
+        "-DMOD_NAME=Horion Android Native Scaffold",
+        "-DMOD_AUTHOR=Oliver",
+        "-DMOD_VERSION=0.1.0",
+        "-DMOD_LIBRARY_NAME=horion_android",
+        "-DMOD_MINECRAFT_VERSIONS=[]"
+    )
 
-    cmake --build $buildDir --target levi_package
+    & cmake @cmakeArgs
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "CMake configuration failed for $TargetAbi."
+    }
+
+    & cmake --build $buildDir --target levi_package
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Package build failed for $TargetAbi."
+    }
 }
 
 if ($Abi -eq "all") {

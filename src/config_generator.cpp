@@ -10,7 +10,8 @@ bool writeJson(const std::filesystem::path &path, const nlohmann::json &value) {
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
     if (ec) {
-        std::cerr << "Failed to create " << path.parent_path() << ": " << ec.message() << '\n';
+        std::cerr << "Failed to create " << path.parent_path()
+                  << ": " << ec.message() << '\n';
         return false;
     }
 
@@ -33,9 +34,9 @@ int main(int argc, char **argv) {
     }
 
     const std::filesystem::path outputDir = argv[1];
-    if (!writeJson(outputDir / "config.json", clange_me::makeDefaultConfigJson()))
+    if (!writeJson(outputDir / "config.json", horion_android::makeDefaultConfigJson()))
         return 1;
-    if (!writeJson(outputDir / "config.schema.json", clange_me::makeConfigSchemaJson()))
+    if (!writeJson(outputDir / "config.schema.json", horion_android::makeConfigSchemaJson()))
         return 1;
 
     return 0;

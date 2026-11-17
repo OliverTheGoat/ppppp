@@ -1,71 +1,82 @@
 #include "mod/MyMod.h"
 
 #include <filesystem>
+#include <system_error>
 
 #include <pl/Mod.hpp>
 
-namespace clange_me {
+namespace horion_android {
 
-ClangeMeMod &ClangeMeMod::instance() {
-    static ClangeMeMod instance;
-    return instance;
+HorionAndroidMod &HorionAndroidMod::instance() {
+    static HorionAndroidMod mod;
+    return mod;
 }
 
-ClangeMeMod::ClangeMeMod() : mSelf(*ll::mod::NativeMod::current()) {}
+HorionAndroidMod::HorionAndroidMod()
+    : mSelf(*ll::mod::NativeMod::current()) {}
 
-bool ClangeMeMod::load() {
+bool HorionAndroidMod::load() {
     auto &self = getSelf();
-    self.getLogger().debug("Loading...");
 
-    std::error_code ec;
-    std::filesystem::create_directories(self.getDataDir(), ec);
-    if (ec) {
-        self.getLogger().error("Failed to create data directory {}: {}", self.getDataDir().string(),
-                               ec.message());
-        return false;
-    }
+    try {
+        std::error_code ec;
+        std::filesystem::create_directories(self.getDataDir(), ec);
+        if (ec) {
+            self.getLogger().error("Cannot create mod data directory: {}", ec.message());
+            return false;
+        }
 
-    std::filesystem::create_directories(self.getConfigDir(), ec);
-    if (ec) {
-        self.getLogger().error("Failed to create config directory {}: {}",
-                               self.getConfigDir().string(), ec.message());
-        return false;
-    }
+        std::filesystem::create_directories(self.getConfigDir(), ec);
+        if (ec) {
+            self.getLogger().error("Cannot create mod config directory: {}", ec.message());
+            return false;
+        }
 
-    mConfigFile.emplace();
-    if (!mConfigFile->load()) {
-        self.getLogger().warn("Failed to load typed config");
-        return false;
-    }
-    mConfig = mConfigFile->value();
+        mConfigFile.emplace();
+        if (!mConfigFile->load()) {
+            self.getLogger().error("Failed to load Horion Android configuration");
+            mConfigFile.reset();
+            return false;
+        }
 
-    self.getLogger().info("Loaded {} from {}", self.getName(), self.getModDir().string());
-    return true;
-}
-
-bool ClangeMeMod::enable() {
-    auto &self = getSelf();
-    self.getLogger().debug("Enabling...");
-    if (!mConfig.enabled) {
-        self.getLogger().info("clange_me is disabled by config");
+        mConfig = mConfigFile->value();
+        self.getLogger().info(
+            "Loaded {}. This scaffold registers no gameplay hooks or patches.",
+            self.getName()
+        );
         return true;
+    } catch (const std::exception &e) {
+        self.getLogger().error("Horion Android load failed: {}", e.what());
+        mConfigFile.reset();
+        return false;
+    } catch (...) {
+        self.getLogger().error("Horion Android load failed with an unknown error");
+        mConfigFile.reset();
+        return false;
+    }
+}
+
+bool HorionAndroidMod::enable() {
+    auto &logger = getSelf().getLogger();
+
+    if (mConfig.enabled) {
+        logger.info("Diagnostic message: {}", mConfig.message);
+    } else {
+        logger.info("Diagnostic logging is disabled by config");
     }
 
-    self.getLogger().info("Config message: {}", mConfig.message);
     return true;
 }
 
-bool ClangeMeMod::disable() {
-    getSelf().getLogger().debug("Disabling...");
-    // Undo enable-time state here.
+bool HorionAndroidMod::disable() {
+    getSelf().getLogger().info("Horion Android scaffold disabled");
     return true;
 }
 
-bool ClangeMeMod::unload() {
-    getSelf().getLogger().debug("Unloading...");
-    // Release load-time resources here.
+bool HorionAndroidMod::unload() {
+    getSelf().getLogger().info("Horion Android scaffold unloaded");
     mConfigFile.reset();
     return true;
 }
 
-} // namespace clange_me
+} // namespace horion_android
