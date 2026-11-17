@@ -24,7 +24,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ""
 
       - name: Install Android build tools
         run: |
